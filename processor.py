@@ -1,49 +1,67 @@
 from pystac_client import Client
-from datetime import datetime
 import geopandas as gpd
-import shapely.geometry
+import stackstac
+import xarray as xr
+import numpy as np
+import pandas as pd
+import dask
+import pyproj
 
 def process_request(params):
-    """Handles loading Sentinel-2 data from STAC and prepares for index calculation."""
-    # Step 1: Extract bounding box from GeoJSON
+    # Step 1: Load geometry and get bounding box
     geometry = gpd.GeoDataFrame.from_features(params.geojson["features"])
     bounds = geometry.total_bounds  # xmin, ymin, xmax, ymax
-
-    # Step 2: Connect to STAC
+    # Step 2: Load STAC items
     client = Client.open("https://earth-search.aws.element84.com/v1")
-
-    # Step 3: Search for Sentinel-2 imagery in the region and time range
     search = client.search(
         collections=["sentinel-2-l2a"],
         bbox=list(bounds),
         datetime=f"{params.start_date}/{params.end_date}",
-        query={"eo:cloud_cover": {"lt": 30}},  # Optional: Filter low-cloud imagery
+        query={"eo:cloud_cover": {"lt": 30}},
         limit=100
     )
 
     items = list(search.get_items())
-
     if not items:
-        return {"message": "No Sentinel-2 imagery found for the given parameters."}
+        return {"message": "No imagery found."}
+    bounds_1 = [bounds[1],bounds[0],bounds[3],bounds[2]]
 
-    # Step 4: Extract useful metadata or asset URLs
-    asset_list = []
-    for item in items:
-        assets = item.to_dict()["assets"]
-        # You may later filter by index (NDVI = B08, B04)
-        asset_list.append({
-            "id": item.id,
-            "date": item.datetime.strftime("%Y-%m-%d"),
-            "assets": {
-                "B04": assets.get("B04", {}).get("href", ""),
-                "B08": assets.get("B08", {}).get("href", "")
-            }
-        })
+    # Step 3: Load assets into xarray with stackstac
+    stack = stackstac.stack(items=items,epsg=4326, bounds_latlon=bounds_1
+)
+    stack_resampled = stack.resample(time = "MS").median("time", keep_attrs = True)
 
-    # Step 5: Return metadata, you will later add NDVI calculation
+
+    # Step 4: Compute NDVI or other index
+    if params.index == "NDVI":
+        data_lazy = stack_resampled.sel(band=["red","nir"])
+        nir = data_lazy.sel(band="nir")
+        red = data_lazy.sel(band="red")
+
+        index = (nir - red) / (nir + red + 1e-6)
+        
+    else:
+        return {"message": f"Index {params.index} not implemented."}
+
+    index.name = params.index
     return {
-        "index_requested": params.index,
-        "aggregation": params.aggregation,
-        "results_found": len(asset_list),
-        "data": asset_list[:5]  # Return first 5 for preview
+        "message": "index request is being completed"
     }
+    # # Step 5: Group by aggregation
+    # if params.aggregation == "monthly":
+    #     grouped = index.groupby("time.month").median(dim="time")
+    # elif params.aggregation == "weekly":
+    #     week = index.time.dt.strftime("%Y-W%U")
+    #     grouped = index.groupby(week).median(dim="time")
+    # elif params.aggregation == "daily":
+    #     grouped = index
+    # else:
+    #     return {"message": f"Unknown aggregation: {params.aggregation}"}
+
+    # # Step 6: Return metadata and shape of results
+    # return {
+    #     "index": params.index,
+    #     "aggregation": params.aggregation,
+    #     "result_shape": list(grouped.shape),
+    #     "time_steps": list(map(str, grouped.coords.get("time", grouped.coords.get("month", [])).values[:5]))
+    # }
