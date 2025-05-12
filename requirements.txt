@@ -1,3 +1,6 @@
 pystac-client
 geopandas
 shapely
+stackstac
+rioxarray
+xarray
