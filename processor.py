@@ -22,21 +22,23 @@ def process_request(params):
     )
 
     items = list(search.get_items())
+    print(f"number of items {len(items)}")
     if not items:
         return {"message": "No imagery found."}
     bounds_1 = [bounds[1],bounds[0],bounds[3],bounds[2]]
 
     # Step 3: Load assets into xarray with stackstac
-    stack = stackstac.stack(items=items,epsg=4326, bounds_latlon=bounds_1
-)
-    stack_resampled = stack.resample(time = "MS").median("time", keep_attrs = True)
+    stack = stackstac.stack(items=items,epsg=4326, bounds_latlon=bounds_1)
+    print(stack)
+    data_lazy = stack.sel(band=["red","nir"])
 
+    stack_resampled = data_lazy.resample(time = "MS").median("time", keep_attrs = True)
+    print(stack_resampled)
 
     # Step 4: Compute NDVI or other index
     if params.index == "NDVI":
-        data_lazy = stack_resampled.sel(band=["red","nir"])
-        nir = data_lazy.sel(band="nir")
-        red = data_lazy.sel(band="red")
+        nir = stack_resampled.sel(band="nir")
+        red = stack_resampled.sel(band="red")
 
         index = (nir - red) / (nir + red + 1e-6)
         
