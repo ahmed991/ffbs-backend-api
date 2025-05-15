@@ -2,6 +2,42 @@ from pystac_client import Client
 import geopandas as gpd
 import stackstac
 import dask.diagnostics as dd
+import rasterio
+from rasterio.transform import from_bounds
+import os
+import numpy as np
+
+
+def save_index_array(index_array, time_array, bounds, output_dir="results", indicator="INDEX"):
+    import os
+    os.makedirs(output_dir, exist_ok=True)
+
+    for i, time_val in enumerate(time_array):
+        arr = index_array[i, :, :].astype("float32")  # shape: (x, y)
+
+        # Define raster transform from bounds
+        transform = from_bounds(
+            bounds[0], bounds[1], bounds[2], bounds[3],
+            arr.shape[1], arr.shape[0]
+        )
+
+        profile = {
+            "driver": "GTiff",
+            "height": arr.shape[0],
+            "width": arr.shape[1],
+            "count": 1,
+            "dtype": "float32",
+            "crs": "EPSG:3857",
+            "transform": transform
+        }
+
+        timestamp = np.datetime_as_string(time_val, unit='s').replace(':', '-')
+        filename = f"{output_dir}/{indicator}_{timestamp}.tif"
+
+        with rasterio.open(filename, "w", **profile) as dst:
+            dst.write(arr, 1)
+
+        print(f"Saved {filename}")
 
 
 #TODO : Class based implementations for these functions, proper modulation and separate file systems to handle requests for Different data providers
@@ -115,7 +151,7 @@ def process_indicator(params):
         epsg=3857,
         assets=bands_required,
         bounds_latlon=bounds,
-        resolution=300  # 10m resolution
+        resolution=10  # 10m resolution
     )
 
     # Step 4: Resample by time
@@ -146,16 +182,20 @@ def process_indicator(params):
 
     elif indicator == "EVI":
         print('yes evi')
-        nir = stack.sel(band="nir")
-        red = stack.sel(band="red")
-        blue = stack.sel(band="blue")
+        nir = stack.sel(band="nir").values
+        red = stack.sel(band="red").values
+        blue = stack.sel(band="blue").values
         index = 2.5 * (nir - red) / (nir + 6 * red - 7.5 * blue + 1)
+
+
 
     else:
         return {"error": f"Indicator logic for {indicator} not implemented."}
 
-    # index.name = indicator
-    print(indicator, index.values)
+# Assuming `index` is a (time, band=1, x, y) numpy array
+# and `stack` is the xarray object you used for band selection
+    print(index.shape)
+    save_index_array(index, stack.time.values, bounds, indicator=indicator)
 
     return {
         "message": f"{indicator} index computed.",
