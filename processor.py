@@ -2,36 +2,45 @@ from pystac_client import Client
 import geopandas as gpd
 
 def historical_viewer(params):
-    # Step 1: Parse GeoJSON and extract bounding box
+    # Step 1: Parse GeoJSON and extract bounds
     geometry = gpd.GeoDataFrame.from_features(params.geojson["features"])
     bounds = geometry.total_bounds  # [xmin, ymin, xmax, ymax]
 
-    # Step 2: Connect to STAC and search items
-    client = Client.open("https://earth-search.aws.element84.com/v1")
-    search = client.search(
+    # Step 2: Connect to STAC catalog
+    catalog = Client.open("https://earth-search.aws.element84.com/v1")
+
+    # Step 3: Query for Sentinel-2 L2A imagery
+    query = {
+        "eo:cloud_cover": {
+            "gte": 0,
+            "lte": 30
+        }
+    }
+
+    result = catalog.search(
         collections=["sentinel-2-l2a"],
         bbox=list(bounds),
         datetime=f"{params.start_date}/{params.end_date}",
-        query={"eo:cloud_cover": {"lt": 20}},
+        query=query,
         limit=50
     )
 
-    items = list(search.get_items())
+    items = list(result.get_items())
     if not items:
-        return {"message": "No imagery found for the selected area and time range."}
+        return {"message": "No imagery found for the selected parameters."}
 
-    # Step 3: Collect thumbnails and dates
+    # Step 4: Extract thumbnail URLs
     thumbnails = []
     for item in items:
-        thumb_asset = item.assets.get("thumbnail")
-        if thumb_asset:
+        asset = item.assets.get("thumbnail")
+        if asset:
             thumbnails.append({
                 "datetime": item.datetime.isoformat(),
-                "thumbnail_url": thumb_asset.href,
+                "thumbnail_url": asset.href,
                 "id": item.id
             })
 
     return {
         "count": len(thumbnails),
-        "thumbnails": thumbnails[:20]  # limit to 20 entries for preview
+        "thumbnails": thumbnails[:20]  # limit to 20 for preview
     }
