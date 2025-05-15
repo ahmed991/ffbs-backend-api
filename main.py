@@ -1,15 +1,12 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import Literal
-from processor import  historical_viewer  # assume both exist
+from processor import  process_indicator,historical_viewer  # assume both exist
 
 app = FastAPI()
 
 class RequestParams(BaseModel):
     geojson: dict
-    product: Literal["sentinel-2"]
-    index: Literal["NDVI", "NDWI", "PVI"]
-    aggregation: Literal["daily", "weekly", "monthly"]
     start_date: str
     end_date: str
 
@@ -20,7 +17,7 @@ class ViewerParams(BaseModel):
 
 @app.post("/compute-index")
 async def compute_index(params: RequestParams):
-    result = process_request(params)
+    result = process_indicator(params)
     return {"status": "success", "result": result}
 
 @app.post("/historical-viewer")
