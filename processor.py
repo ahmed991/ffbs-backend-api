@@ -3,6 +3,7 @@ import geopandas as gpd
 import stackstac
 import dask.diagnostics as dd
 
+
 #TODO : Class based implementations for these functions, proper modulation and separate file systems to handle requests for Different data providers
 
 def historical_viewer(params):
@@ -33,28 +34,30 @@ def historical_viewer(params):
     if not items:
         return {"message": "No imagery found for the selected parameters."}
 
-    # Step 4: Extract thumbnail URLs
+    # Step 4: Extract thumbnail URLs and bounding boxes
     thumbnails = []
     for item in items:
         asset = item.assets.get("thumbnail")
-        if asset:
+        if asset and item.bbox:
             thumbnails.append({
                 "datetime": item.datetime.isoformat(),
                 "thumbnail_url": asset.href,
-                "id": item.id
+                "id": item.id,
+                "bbox": item.bbox  # [minLon, minLat, maxLon, maxLat]
             })
 
     return {
         "count": len(thumbnails),
-        "thumbnails": thumbnails  # limit to 20 for preview
+        "thumbnails": thumbnails  # Limit to 20 for preview
     }
+
 
 # TODO: Add a dedicated function for handling STAC queries from the server
 # TODO split functions for Sentinel 2A, landast and planet
 # TODO separate functions for each indicator, class based handling
 def process_indicator(params):
     print(params)
-
+    print(params.resample)
     sensor = params.satellite_sensor
     SENSOR_COLLECTION_MAP = {
         "sentinel-2": "sentinel-2-l2a",
@@ -112,17 +115,19 @@ def process_indicator(params):
         epsg=3857,
         assets=bands_required,
         bounds_latlon=bounds,
-        resolution=10  # 10m resolution
+        resolution=300  # 10m resolution
     )
 
     # Step 4: Resample by time
-    stack = stack.resample(time=resample).median("time", keep_attrs=True)
+    stack = stack.resample(time=resample).median("time", keep_attrs=True).compute()
 
     # Step 5: Compute the indicator
     if indicator == "NDVI":
-        red = stack.sel(band="red")
-        nir = stack.sel(band="nir")
+        print("yes here")
+        red = stack.sel(band="red").values
+        nir = stack.sel(band="nir").values
         index = (nir - red) / (nir + red + 1e-6)
+
 
     elif indicator == "NDWI":
         green = stack.sel(band="green")
@@ -140,6 +145,7 @@ def process_indicator(params):
         index = (nir - swir) / (nir + swir + 1e-6)
 
     elif indicator == "EVI":
+        print('yes evi')
         nir = stack.sel(band="nir")
         red = stack.sel(band="red")
         blue = stack.sel(band="blue")
@@ -148,11 +154,12 @@ def process_indicator(params):
     else:
         return {"error": f"Indicator logic for {indicator} not implemented."}
 
-    index.name = indicator
+    # index.name = indicator
+    print(indicator, index.values)
 
     return {
         "message": f"{indicator} index computed.",
-        "time_steps": [str(t.values) for t in index.time[:5]],  # preview
+        # "time_steps": [str(t.values) for t in index.time[:5]],  # preview
         "shape": index.shape
     }
 
