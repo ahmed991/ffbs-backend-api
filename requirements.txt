@@ -4,3 +4,11 @@ shapely
 stackstac
 rioxarray
 xarray
+rasterio
+mangum
+fastapi
+pillow
+pydantic
+numpy
+typing
+uvicorn

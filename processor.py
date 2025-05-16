@@ -119,7 +119,8 @@ def process_indicator(params):
         "NDMI": ["nir", "swir16"],
         "EVI": ["nir", "red", "blue"],
         "MSI":["nir", "swir16"],
-        "SAVI":["nir", "red"]
+        "SAVI":["nir", "red"],
+        "SCL":["scl"]
 
     }
 
@@ -160,10 +161,11 @@ def process_indicator(params):
     )
 
     # Step 4: Resample by time
-    stack = stack.resample(time=resample).median("time", keep_attrs=True).compute()
 
     # Step 5: Compute the indicator
     if indicator == "NDVI":
+        stack = stack.resample(time=resample).median("time", keep_attrs=True).compute()
+
         print("yes here")
         red = stack.sel(band="red").values
         nir = stack.sel(band="nir").values
@@ -171,21 +173,29 @@ def process_indicator(params):
 
 
     elif indicator == "NDWI":
+        stack = stack.resample(time=resample).median("time", keep_attrs=True).compute()
+
         green = stack.sel(band="green").values
         nir = stack.sel(band="nir").values
         index = (green - nir) / (green + nir + 1e-6)
 
     elif indicator == "PVI":
+        stack = stack.resample(time=resample).median("time", keep_attrs=True).compute()
+
         red = stack.sel(band="red").values
         nir = stack.sel(band="nir").values
         index = 1.5 * ((nir - 0.5 * red) / np.sqrt(1.25))  # simplified example
 
     elif indicator == "NDMI":
+        stack = stack.resample(time=resample).median("time", keep_attrs=True).compute()
+
         nir = stack.sel(band="nir").values
         swir = stack.sel(band="swir16").values
         index = (nir - swir) / (nir + swir + 1e-6)
 
     elif indicator == "EVI":
+        stack = stack.resample(time=resample).median("time", keep_attrs=True).compute()
+
         print('yes evi')
         nir = stack.sel(band="nir").values
         red = stack.sel(band="red").values
@@ -193,16 +203,27 @@ def process_indicator(params):
         index = 2.5 * (nir - red) / (nir + 6 * red - 7.5 * blue + 1)
 
     elif indicator == "MSI":
+        stack = stack.resample(time=resample).median("time", keep_attrs=True).compute()
+
         nir = stack.sel(band="nir").values
         swir = stack.sel(band="swir16").values  # swir16 is typically Band 11
         index = swir / nir 
 
     elif indicator == "SAVI":
+        stack = stack.resample(time=resample).median("time", keep_attrs=True).compute()
+
         print('yes savi')
         nir = stack.sel(band="nir").values
         red = stack.sel(band="red").values
         L = 0.5
         index = ((nir - red) / (nir + red + L)) * (1 + L)
+    elif indicator == "SCL":
+        stack = stack.resample(time=resample).median("time", keep_attrs=True).compute()
+
+        scl = stack.sel(band = "scl").values
+        index = np.where(np.round(scl)==4,4,0)
+        
+
 
     else:
         return {"error": f"Indicator logic for {indicator} not implemented."}

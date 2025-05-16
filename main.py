@@ -9,9 +9,10 @@ import numpy as np
 import os
 from PIL import Image
 from fastapi.middleware.cors import CORSMiddleware
-
+from mangum import Mangum
 # TODO, add file clearner by date
 app = FastAPI()
+handler = Mangum(app)
 # 🚀 Allow requests from your Vite frontend
 app.add_middleware(
     CORSMiddleware,
@@ -79,7 +80,7 @@ class RequestParams(BaseModel):
     start_date: str
     end_date: str
     satellite_sensor: Literal["sentinel-2", "sentinel-1", "landsat", "naip", "cop-dem-30", "cop-dem-90"]
-    indicator: Literal["NDVI", "NDWI", "PVI", "LAI", "NDMI", "EVI","SAVI","MSI"]
+    indicator: Literal["NDVI", "NDWI", "PVI", "LAI", "NDMI", "EVI","SAVI","MSI","SCL"]
     cloud_cover: Optional[float] = 100  # default: allow any cloud cover
     resample: Optional[str] = "MS"  # default: weekly (1W, 1D, 1M)
 
