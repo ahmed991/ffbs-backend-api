@@ -16,7 +16,7 @@ handler = Mangum(app)
 # 🚀 Allow requests from your Vite frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://http://3.121.112.193:5173"],  # frontend origin
+    allow_origins=["http://3.121.112.193:5173"],  # frontend origin
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
