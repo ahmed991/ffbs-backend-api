@@ -265,8 +265,8 @@ def process_indicator(params):
 
         saved_files.append({
             "timestamp": timestamp,
-            "tif_url": f"http://http://3.121.112.193:8000/raster/{quote(tif_filename.replace('.tif', ''))}/tif",
-            "png_url": f"http://http://3.121.112.193:8000/raster/{quote(tif_filename.replace('.tif', ''))}",
+            "tif_url": f"http://3.121.112.193:8000/raster/{quote(tif_filename.replace('.tif', ''))}/tif",
+            "png_url": f"http://3.121.112.193:8000/raster/{quote(tif_filename.replace('.tif', ''))}",
             "bounds": list(bounds)
         })
 
