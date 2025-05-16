@@ -8,9 +8,18 @@ import rasterio
 import numpy as np
 import os
 from PIL import Image
+from fastapi.middleware.cors import CORSMiddleware
+
 # TODO, add file clearner by date
 app = FastAPI()
-
+# 🚀 Allow requests from your Vite frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # frontend origin
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 INDICATOR_RANGE = {
     "NDVI": (-1.0, 1.0),
     "NDWI": (-1.0, 1.0),
@@ -70,7 +79,7 @@ class RequestParams(BaseModel):
     start_date: str
     end_date: str
     satellite_sensor: Literal["sentinel-2", "sentinel-1", "landsat", "naip", "cop-dem-30", "cop-dem-90"]
-    indicator: Literal["NDVI", "NDWI", "PVI", "LAI", "NDMI", "EVI"]
+    indicator: Literal["NDVI", "NDWI", "PVI", "LAI", "NDMI", "EVI","SAVI","MSI"]
     cloud_cover: Optional[float] = 100  # default: allow any cloud cover
     resample: Optional[str] = "MS"  # default: weekly (1W, 1D, 1M)
 

@@ -6,6 +6,8 @@ import rasterio
 from rasterio.transform import from_bounds
 import os
 import numpy as np
+from urllib.parse import quote
+from PIL import Image
 
 
 def save_index_array(index_array, time_array, bounds, output_dir="results", indicator="INDEX"):
@@ -91,9 +93,9 @@ def historical_viewer(params):
 # TODO: Add a dedicated function for handling STAC queries from the server
 # TODO split functions for Sentinel 2A, landast and planet
 # TODO separate functions for each indicator, class based handling
+# TODO add a separate endpoint for green forest change.
 def process_indicator(params):
     print(params)
-    print(params.resample)
     sensor = params.satellite_sensor
     SENSOR_COLLECTION_MAP = {
         "sentinel-2": "sentinel-2-l2a",
@@ -115,7 +117,10 @@ def process_indicator(params):
         "PVI": ["nir", "red"],
         "LAI": ["red", "nir", "swir16"],
         "NDMI": ["nir", "swir16"],
-        "EVI": ["nir", "red", "blue"]
+        "EVI": ["nir", "red", "blue"],
+        "MSI":["nir", "swir16"],
+        "SAVI":["nir", "red"]
+
     }
 
     bands_required = INDICATOR_BAND_MAP.get(indicator)
@@ -166,18 +171,18 @@ def process_indicator(params):
 
 
     elif indicator == "NDWI":
-        green = stack.sel(band="green")
-        nir = stack.sel(band="nir")
+        green = stack.sel(band="green").values
+        nir = stack.sel(band="nir").values
         index = (green - nir) / (green + nir + 1e-6)
 
     elif indicator == "PVI":
-        red = stack.sel(band="red")
-        nir = stack.sel(band="nir")
+        red = stack.sel(band="red").values
+        nir = stack.sel(band="nir").values
         index = 1.5 * ((nir - 0.5 * red) / np.sqrt(1.25))  # simplified example
 
     elif indicator == "NDMI":
-        nir = stack.sel(band="nir")
-        swir = stack.sel(band="swir16")
+        nir = stack.sel(band="nir").values
+        swir = stack.sel(band="swir16").values
         index = (nir - swir) / (nir + swir + 1e-6)
 
     elif indicator == "EVI":
@@ -187,7 +192,17 @@ def process_indicator(params):
         blue = stack.sel(band="blue").values
         index = 2.5 * (nir - red) / (nir + 6 * red - 7.5 * blue + 1)
 
+    elif indicator == "MSI":
+        nir = stack.sel(band="nir").values
+        swir = stack.sel(band="swir16").values  # swir16 is typically Band 11
+        index = swir / nir 
 
+    elif indicator == "SAVI":
+        print('yes savi')
+        nir = stack.sel(band="nir").values
+        red = stack.sel(band="red").values
+        L = 0.5
+        index = ((nir - red) / (nir + red + L)) * (1 + L)
 
     else:
         return {"error": f"Indicator logic for {indicator} not implemented."}
@@ -195,15 +210,47 @@ def process_indicator(params):
 # Assuming `index` is a (time, band=1, x, y) numpy array
 # and `stack` is the xarray object you used for band selection
     print(index.shape)
-    save_index_array(index, stack.time.values, bounds, indicator=indicator)
+
+# Save GeoTIFFs and return list of filenames
+    saved_files = []
+    os.makedirs("results", exist_ok=True)
+
+    for i, time_val in enumerate(stack.time.values):
+        arr = index[i, :, :].astype("float32")
+        transform = from_bounds(bounds[0], bounds[1], bounds[2], bounds[3], arr.shape[1], arr.shape[0])
+        profile = {
+            "driver": "GTiff",
+            "height": arr.shape[0],
+            "width": arr.shape[1],
+            "count": 1,
+            "dtype": "float32",
+            "crs": "EPSG:3857",
+            "transform": transform
+        }
+
+        timestamp = np.datetime_as_string(time_val, unit='s').replace(":", "-")
+        tif_filename = f"{indicator}_{timestamp}.tif"
+        tif_path = f"results/{tif_filename}"
+        png_path = tif_path.replace(".tif", ".png")
+
+        with rasterio.open(tif_path, "w", **profile) as dst:
+            dst.write(arr, 1)
+
+        # Generate PNG
+        arr = np.nan_to_num(arr, nan=-1)
+        arr_norm = (arr + 1) / 2  # for NDVI range -1 to 1
+        arr_scaled = (arr_norm * 255).clip(0, 255).astype("uint8")
+        Image.fromarray(arr_scaled).save(png_path)
+
+        saved_files.append({
+            "timestamp": timestamp,
+            "tif_url": f"http://localhost:8000/raster/{quote(tif_filename.replace('.tif', ''))}/tif",
+            "png_url": f"http://localhost:8000/raster/{quote(tif_filename.replace('.tif', ''))}",
+            "bounds": list(bounds)
+        })
 
     return {
         "message": f"{indicator} index computed.",
-        # "time_steps": [str(t.values) for t in index.time[:5]],  # preview
-        "shape": index.shape
+        "products": saved_files
     }
-
-  
-
-
 
