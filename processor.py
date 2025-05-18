@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg')  # Non-GUI backend suitable for servers
 from pystac_client import Client
 import geopandas as gpd
 import stackstac
@@ -9,6 +11,7 @@ from urllib.parse import quote
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 import xarray as xr
+
 
 
 
@@ -393,12 +396,14 @@ def process_indicator(params):
             value_range = None
 
         save_legend_image(legend_path, indicator, colormap_used, value_range)
-
+        # Save legend image
+        print(f"http://localhost:8000/raster/{quote(legend_path.split('/')[-1].replace('.png', ''))}")
         saved_files.append({
             "timestamp": timestamp,
             "tif_url": f"http://localhost:8000/raster/{quote(tif_filename.replace('.tif', ''))}/tif",
             "png_url": f"http://localhost:8000/raster/{quote(tif_filename.replace('.tif', ''))}",
             "legend_url": f"http://localhost:8000/raster/{quote(legend_path.split('/')[-1].replace('.png', ''))}",
+
             "bounds": list(bounds),
             "colormap_used": colormap_used
         })

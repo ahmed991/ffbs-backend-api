@@ -44,6 +44,15 @@ def serve_raster_tif(filename: str):
     tif_path = f"results/{filename}.tif"
     return FileResponse(tif_path, media_type="image/tiff")
 
+# @app.get("/legend/{filename}")
+# def serve_legend_png(filename: str):
+#     path = f"results/{filename}.png"
+#     print(path)
+#     if os.path.exists(path):
+#         return FileResponse(path, media_type="image/png")
+#     else:
+#         return {"error": "Legend image not found."}
+
 @app.get("/raster/{filename}/bounds")
 def get_raster_bounds(filename: str):
     tif_path = f"results/{filename}.tif"
