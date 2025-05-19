@@ -280,9 +280,20 @@ def process_indicator(params):
     }
     collection = SENSOR_COLLECTION_MAP.get(sensor)
 
-    indicator = params.indicator.upper()
+
+    indicator = params.indicator
+    print(indicator)
+    if (indicator == "Green Forest Change" or indicator =="GREEN FOREST CHANGE"):
+        indicator = "SCL"
+    elif (indicator == "Soil Fertility Map" or indicator == "SOIL FERTILITY MAP"):
+        indicator = "SFM"
+
+    print(indicator)
+
+    indicator = indicator.upper()
     cloud_cover = params.cloud_cover
     resample = params.resample
+
 
     INDICATOR_BAND_MAP = {
         "NDVI": ["nir", "red"],
