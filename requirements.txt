@@ -12,3 +12,6 @@ pydantic
 numpy
 typing
 uvicorn
+requests
+aiohttp
+matplotlib

@@ -1,3 +1,21 @@
+import matplotlib
+matplotlib.use('Agg')  # Non-GUI backend suitable for servers
+from pystac_client import Client
+import geopandas as gpd
+import stackstac
+import rasterio
+from rasterio.transform import from_bounds
+import os
+import numpy as np
+from urllib.parse import quote
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+import xarray as xr
+
+
+
+
+
 from pystac_client import Client
 import geopandas as gpd
 import stackstac
@@ -9,6 +27,69 @@ import numpy as np
 from urllib.parse import quote
 from PIL import Image
 
+import numpy as np
+import xarray as xr
+
+
+def save_legend_image(output_path, indicator, colormap_used, value_range=None):
+    import matplotlib.pyplot as plt
+    from matplotlib.colorbar import ColorbarBase
+    from matplotlib.colors import Normalize, ListedColormap
+
+    fig, ax = plt.subplots(figsize=(4, 0.6))
+    ax.set_title(indicator, fontsize=8)
+
+    if indicator == "SFM":
+        cmap = ListedColormap(["#a50026", "#f46d43", "#fdae61", "#a6d96a", "#1a9850"])
+        bounds = [1, 2, 3, 4, 5, 6]
+        norm = Normalize(vmin=1, vmax=5)
+        cb = ColorbarBase(ax, cmap=cmap, norm=norm, boundaries=bounds, orientation="horizontal", ticks=[1, 2, 3, 4, 5])
+        cb.ax.set_xticklabels(["1", "2", "3", "4", "5"])
+    elif indicator == "SCL":
+        cmap = ListedColormap(["green"])
+        norm = Normalize(vmin=0, vmax=1)
+        cb = ColorbarBase(ax, cmap=cmap, norm=norm, orientation="horizontal", ticks=[0, 1])
+        cb.ax.set_xticklabels(["0", "Green Cover"])
+    else:
+        cmap = plt.get_cmap(colormap_used)
+        vmin, vmax = value_range if value_range else (0, 1)
+        norm = Normalize(vmin=vmin, vmax=vmax)
+        cb = ColorbarBase(ax, cmap=cmap, norm=norm, orientation="horizontal")
+        cb.set_label(f"{indicator} ({vmin} to {vmax})", fontsize=7)
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches='tight', transparent=True)
+    plt.close()
+
+
+def classify_ndvi(ndvi):
+    """
+    Classify NDVI or SFM values into fertility categories.
+
+    Classes:
+        1 = Very Low (NDVI < 0.2)
+        2 = Low      (0.2 ≤ NDVI < 0.4)
+        3 = Moderate (0.4 ≤ NDVI < 0.6)
+        4 = High     (0.6 ≤ NDVI < 0.8)
+        5 = Very High(NDVI ≥ 0.8)
+
+    Parameters:
+        ndvi: xarray.DataArray or numpy.ndarray
+
+    Returns:
+        Classified values with same shape/type
+    """
+
+    if isinstance(ndvi, xr.DataArray):
+        return xr.where(ndvi < 0.2, 1,
+               xr.where(ndvi < 0.4, 2,
+               xr.where(ndvi < 0.6, 3,
+               xr.where(ndvi < 0.8, 4, 5))))
+    else:
+        return np.where(ndvi < 0.2, 1,
+               np.where(ndvi < 0.4, 2,
+               np.where(ndvi < 0.6, 3,
+               np.where(ndvi < 0.8, 4, 5))))
 
 def save_index_array(index_array, time_array, bounds, output_dir="results", indicator="INDEX"):
     import os
@@ -94,8 +175,100 @@ def historical_viewer(params):
 # TODO split functions for Sentinel 2A, landast and planet
 # TODO separate functions for each indicator, class based handling
 # TODO add a separate endpoint for green forest change.
+# TODO add a separate endpoint for Soil firtility index
 def process_indicator(params):
-    print(params)
+    from pystac_client import Client
+    import geopandas as gpd
+    import stackstac
+    import rasterio
+    from rasterio.transform import from_bounds
+    import os
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import ListedColormap
+    import xarray as xr
+    from urllib.parse import quote
+
+    def classify_ndvi(ndvi):
+        return xr.where(ndvi < 0.2, 1,
+               xr.where(ndvi < 0.4, 2,
+               xr.where(ndvi < 0.6, 3,
+               xr.where(ndvi < 0.8, 4, 5))))
+
+    def plot_tif_as_png(tif_path, png_path, indicator):
+        with rasterio.open(tif_path) as src:
+            data = src.read(1)
+            fig, ax = plt.subplots(figsize=(8, 8), dpi=300)
+            ax.axis('off')
+            colormap_used = None
+
+            if indicator == "SFM":
+                cmap = ListedColormap(["#a50026", "#f46d43", "#fdae61", "#a6d96a", "#1a9850"])
+                colormap_used = "SFM_CUSTOM"
+                ax.imshow(data, cmap=cmap, vmin=1, vmax=5)
+
+            elif indicator == "SCL":
+                mask = np.where(data == 4, 1, np.nan)
+                cmap = ListedColormap(["green"])
+                colormap_used = "SCL_GREEN"
+                ax.imshow(mask, cmap=cmap)
+
+            else:
+                ranges = {
+                    "NDVI": (-1, 1), "NDWI": (-1, 1), "NDMI": (-1, 1),
+                    "EVI": (0, 3), "PVI": (0, 2), "LAI": (0, 6)
+                }
+                vmin, vmax = ranges.get(indicator, (np.nanmin(data), np.nanmax(data)))
+                cmap = "RdYlGn"
+                colormap_used = cmap
+                ax.imshow(data, cmap=cmap, vmin=vmin, vmax=vmax)
+
+            plt.tight_layout()
+            
+            # Corrected save parameters for web compatibility:
+            plt.savefig(
+                png_path,
+                dpi=300,
+                bbox_inches='tight',
+                pad_inches=0.05,
+                format='png',
+                facecolor='white',  # White background instead of transparent
+                transparent=False   # Explicitly disable transparency
+            )
+            
+            plt.close()
+            return colormap_used
+
+    def save_legend_image(output_path, indicator, colormap_used, value_range=None):
+        from matplotlib.colorbar import ColorbarBase
+        from matplotlib.colors import Normalize
+
+        fig, ax = plt.subplots(figsize=(4, 0.6))
+        ax.set_title(indicator, fontsize=8)
+
+        if indicator == "SFM":
+            cmap = ListedColormap(["#a50026", "#f46d43", "#fdae61", "#a6d96a", "#1a9850"])
+            norm = Normalize(vmin=1, vmax=5)
+            cb = ColorbarBase(ax, cmap=cmap, norm=norm, boundaries=[1, 2, 3, 4, 5, 6],
+                              orientation="horizontal", ticks=[1, 2, 3, 4, 5])
+            cb.ax.set_xticklabels(["1", "2", "3", "4", "5"])
+        elif indicator == "SCL":
+            cmap = ListedColormap(["green"])
+            norm = Normalize(vmin=0, vmax=1)
+            cb = ColorbarBase(ax, cmap=cmap, norm=norm, orientation="horizontal", ticks=[0, 1])
+            cb.ax.set_xticklabels(["0", "Green"])
+        else:
+            cmap = plt.get_cmap(colormap_used)
+            vmin, vmax = value_range if value_range else (0, 1)
+            norm = Normalize(vmin=vmin, vmax=vmax)
+            cb = ColorbarBase(ax, cmap=cmap, norm=norm, orientation="horizontal")
+            cb.set_label(f"{indicator} ({vmin} to {vmax})", fontsize=7)
+
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=150, bbox_inches='tight', transparent=True)
+        plt.close()
+
+    # Begin main logic
     sensor = params.satellite_sensor
     SENSOR_COLLECTION_MAP = {
         "sentinel-2": "sentinel-2-l2a",
@@ -107,9 +280,20 @@ def process_indicator(params):
     }
     collection = SENSOR_COLLECTION_MAP.get(sensor)
 
-    indicator = params.indicator.upper()
+
+    indicator = params.indicator
+    print(indicator)
+    if (indicator == "Green Forest Change" or indicator =="GREEN FOREST CHANGE"):
+        indicator = "SCL"
+    elif (indicator == "Soil Fertility Map" or indicator == "SOIL FERTILITY MAP"):
+        indicator = "SFM"
+
+    print(indicator)
+
+    indicator = indicator.upper()
     cloud_cover = params.cloud_cover
     resample = params.resample
+
 
     INDICATOR_BAND_MAP = {
         "NDVI": ["nir", "red"],
@@ -118,10 +302,10 @@ def process_indicator(params):
         "LAI": ["red", "nir", "swir16"],
         "NDMI": ["nir", "swir16"],
         "EVI": ["nir", "red", "blue"],
-        "MSI":["nir", "swir16"],
-        "SAVI":["nir", "red"],
-        "SCL":["scl"]
-
+        "MSI": ["nir", "swir16"],
+        "SAVI": ["nir", "red"],
+        "SCL": ["scl"],
+        "SFM": ["nir", "red"]
     }
 
     bands_required = INDICATOR_BAND_MAP.get(indicator)
@@ -129,115 +313,69 @@ def process_indicator(params):
         return {"error": f"Indicator {indicator} is not supported."}
 
     geometry = gpd.GeoDataFrame.from_features(params.geojson["features"])
-    bounds = geometry.total_bounds  # [xmin, ymin, xmax, ymax]
+    bounds = geometry.total_bounds
 
-    # Step 2: Connect to STAC
     catalog = Client.open("https://earth-search.aws.element84.com/v1")
-    query = {
-        "eo:cloud_cover": {
-            "gte": 0,
-            "lte": cloud_cover
-        }
-    }
+    query = {"eo:cloud_cover": {"gte": 0, "lte": cloud_cover}}
 
     result = catalog.search(
         collections=[collection],
         bbox=list(bounds),
         datetime=f"{params.start_date}/{params.end_date}",
-        query=query,
+        query=query
     ).item_collection()
 
     items = list(result)
     if not items:
         return {"message": "No imagery found for the given parameters."}
 
-    # Step 3: Stack with the correct bands
     stack = stackstac.stack(
         items=items,
         epsg=3857,
         assets=bands_required,
         bounds_latlon=bounds,
-        resolution=10  # 10m resolution
-    )
+        resolution=10
+    ).resample(time=resample).median("time", keep_attrs=True).compute()
 
-    # Step 4: Resample by time
-
-    # Step 5: Compute the indicator
+    # Compute index
     if indicator == "NDVI":
-        stack = stack.resample(time=resample).median("time", keep_attrs=True).compute()
-
-        print("yes here")
-        red = stack.sel(band="red").values
-        nir = stack.sel(band="nir").values
-        index = (nir - red) / (nir + red + 1e-6)
-
-
+        index = (stack.sel(band="nir") - stack.sel(band="red")) / (stack.sel(band="nir") + stack.sel(band="red") + 1e-6)
     elif indicator == "NDWI":
-        stack = stack.resample(time=resample).median("time", keep_attrs=True).compute()
-
-        green = stack.sel(band="green").values
-        nir = stack.sel(band="nir").values
-        index = (green - nir) / (green + nir + 1e-6)
-
+        index = (stack.sel(band="nir") - stack.sel(band="green")) / (stack.sel(band="nir") + stack.sel(band="green") + 1e-6)
     elif indicator == "PVI":
-        stack = stack.resample(time=resample).median("time", keep_attrs=True).compute()
-
-        red = stack.sel(band="red").values
-        nir = stack.sel(band="nir").values
-        index = 1.5 * ((nir - 0.5 * red) / np.sqrt(1.25))  # simplified example
-
+        red = stack.sel(band="red")
+        nir = stack.sel(band="nir")
+        index = 1.5 * ((nir - 0.5 * red) / np.sqrt(1.25))
     elif indicator == "NDMI":
-        stack = stack.resample(time=resample).median("time", keep_attrs=True).compute()
-
-        nir = stack.sel(band="nir").values
-        swir = stack.sel(band="swir16").values
+        nir = stack.sel(band="nir")
+        swir = stack.sel(band="swir16")
         index = (nir - swir) / (nir + swir + 1e-6)
-
     elif indicator == "EVI":
-        stack = stack.resample(time=resample).median("time", keep_attrs=True).compute()
-
-        print('yes evi')
-        nir = stack.sel(band="nir").values
-        red = stack.sel(band="red").values
-        blue = stack.sel(band="blue").values
+        nir = stack.sel(band="nir")
+        red = stack.sel(band="red")
+        blue = stack.sel(band="blue")
         index = 2.5 * (nir - red) / (nir + 6 * red - 7.5 * blue + 1)
-
     elif indicator == "MSI":
-        stack = stack.resample(time=resample).median("time", keep_attrs=True).compute()
-
-        nir = stack.sel(band="nir").values
-        swir = stack.sel(band="swir16").values  # swir16 is typically Band 11
-        index = swir / nir 
-
+        index = stack.sel(band="swir16") / stack.sel(band="nir")
     elif indicator == "SAVI":
-        stack = stack.resample(time=resample).median("time", keep_attrs=True).compute()
-
-        print('yes savi')
-        nir = stack.sel(band="nir").values
-        red = stack.sel(band="red").values
+        nir = stack.sel(band="nir")
+        red = stack.sel(band="red")
         L = 0.5
         index = ((nir - red) / (nir + red + L)) * (1 + L)
     elif indicator == "SCL":
-        stack = stack.resample(time=resample).median("time", keep_attrs=True).compute()
-
-        scl = stack.sel(band = "scl").values
-        index = np.where(np.round(scl)==4,4,0)
-        
-
-
+        scl = stack.sel(band="scl")
+        index = xr.where(np.round(scl) == 4, 4, 0)
+    elif indicator == "SFM":
+        ndvi = (stack.sel(band="nir") - stack.sel(band="red")) / (stack.sel(band="nir") + stack.sel(band="red") + 1e-6)
+        index = classify_ndvi(ndvi)
     else:
         return {"error": f"Indicator logic for {indicator} not implemented."}
 
-# Assuming `index` is a (time, band=1, x, y) numpy array
-# and `stack` is the xarray object you used for band selection
-    print(index.shape)
-
-# Save GeoTIFFs and return list of filenames
-    saved_files = []
     os.makedirs("results", exist_ok=True)
+    saved_files = []
 
     for i, time_val in enumerate(stack.time.values):
-        arr = index[i, :, :].astype("float32")
+        arr = index.sel(time=time_val).values.astype("float32")
         transform = from_bounds(bounds[0], bounds[1], bounds[2], bounds[3], arr.shape[1], arr.shape[0])
         profile = {
             "driver": "GTiff",
@@ -248,26 +386,39 @@ def process_indicator(params):
             "crs": "EPSG:3857",
             "transform": transform
         }
-
+    
         timestamp = np.datetime_as_string(time_val, unit='s').replace(":", "-")
         tif_filename = f"{indicator}_{timestamp}.tif"
         tif_path = f"results/{tif_filename}"
         png_path = tif_path.replace(".tif", ".png")
+        legend_path = tif_path.replace(".tif", "_legend.png")
 
         with rasterio.open(tif_path, "w", **profile) as dst:
             dst.write(arr, 1)
 
-        # Generate PNG
-        arr = np.nan_to_num(arr, nan=-1)
-        arr_norm = (arr + 1) / 2  # for NDVI range -1 to 1
-        arr_scaled = (arr_norm * 255).clip(0, 255).astype("uint8")
-        Image.fromarray(arr_scaled).save(png_path)
+        colormap_used = plot_tif_as_png(tif_path, png_path, indicator)
 
+        if indicator in ["NDVI", "NDWI", "NDMI", "EVI", "PVI", "LAI"]:
+            value_range = {
+                "NDVI": (-1, 1), "NDWI": (-1, 1), "NDMI": (-1, 1),
+                "EVI": (0, 3), "PVI": (0, 2), "LAI": (0, 6)
+            }.get(indicator)
+        else:
+            value_range = None
+
+        save_legend_image(legend_path, indicator, colormap_used, value_range)
+        # Save legend image
+        print(f"http://localhost:8000/raster/{quote(legend_path.split('/')[-1].replace('.png', ''))}")
         saved_files.append({
             "timestamp": timestamp,
-            "tif_url": f"http://3.121.112.193:8000/raster/{quote(tif_filename.replace('.tif', ''))}/tif",
-            "png_url": f"http://3.121.112.193:8000/raster/{quote(tif_filename.replace('.tif', ''))}",
-            "bounds": list(bounds)
+
+            "tif_url": f"http://localhost:8000/raster/{quote(tif_filename.replace('.tif', ''))}/tif",
+            "png_url": f"http://localhost:8000/raster/{quote(tif_filename.replace('.tif', ''))}",
+            "legend_url": f"http://localhost:8000/raster/{quote(legend_path.split('/')[-1].replace('.png', ''))}",
+
+            "bounds": list(bounds),
+            "colormap_used": colormap_used
+
         })
 
     return {
