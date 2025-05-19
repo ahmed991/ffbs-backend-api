@@ -10,10 +10,12 @@ import numpy as np
 from PIL import Image
 from urllib.parse import quote
 from mangum import Mangum
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
 handler = Mangum(app)
 
+app.mount("/static", StaticFiles(directory="static"), name="static")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

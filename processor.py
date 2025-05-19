@@ -40,7 +40,7 @@ def save_legend_image(output_path, indicator, colormap_used, value_range=None):
     ax.set_title(indicator, fontsize=8)
 
     if indicator == "SFM":
-        cmap = ListedColormap(["#8c510a", "#d8b365", "#f6e8c3", "#5ab4ac", "#01665e"])
+        cmap = ListedColormap(["#a50026", "#f46d43", "#fdae61", "#a6d96a", "#1a9850"])
         bounds = [1, 2, 3, 4, 5, 6]
         norm = Normalize(vmin=1, vmax=5)
         cb = ColorbarBase(ax, cmap=cmap, norm=norm, boundaries=bounds, orientation="horizontal", ticks=[1, 2, 3, 4, 5])
@@ -203,7 +203,7 @@ def process_indicator(params):
             colormap_used = None
 
             if indicator == "SFM":
-                cmap = ListedColormap(["#8c510a", "#d8b365", "#f6e8c3", "#5ab4ac", "#01665e"])
+                cmap = ListedColormap(["#a50026", "#f46d43", "#fdae61", "#a6d96a", "#1a9850"])
                 colormap_used = "SFM_CUSTOM"
                 ax.imshow(data, cmap=cmap, vmin=1, vmax=5)
 
@@ -247,7 +247,7 @@ def process_indicator(params):
         ax.set_title(indicator, fontsize=8)
 
         if indicator == "SFM":
-            cmap = ListedColormap(["#8c510a", "#d8b365", "#f6e8c3", "#5ab4ac", "#01665e"])
+            cmap = ListedColormap(["#a50026", "#f46d43", "#fdae61", "#a6d96a", "#1a9850"])
             norm = Normalize(vmin=1, vmax=5)
             cb = ColorbarBase(ax, cmap=cmap, norm=norm, boundaries=[1, 2, 3, 4, 5, 6],
                               orientation="horizontal", ticks=[1, 2, 3, 4, 5])
@@ -375,7 +375,7 @@ def process_indicator(params):
             "crs": "EPSG:3857",
             "transform": transform
         }
-
+    
         timestamp = np.datetime_as_string(time_val, unit='s').replace(":", "-")
         tif_filename = f"{indicator}_{timestamp}.tif"
         tif_path = f"results/{tif_filename}"
