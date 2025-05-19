@@ -411,12 +411,14 @@ def process_indicator(params):
         print(f"http://localhost:8000/raster/{quote(legend_path.split('/')[-1].replace('.png', ''))}")
         saved_files.append({
             "timestamp": timestamp,
+
             "tif_url": f"http://localhost:8000/raster/{quote(tif_filename.replace('.tif', ''))}/tif",
             "png_url": f"http://localhost:8000/raster/{quote(tif_filename.replace('.tif', ''))}",
             "legend_url": f"http://localhost:8000/raster/{quote(legend_path.split('/')[-1].replace('.png', ''))}",
 
             "bounds": list(bounds),
             "colormap_used": colormap_used
+
         })
 
     return {
