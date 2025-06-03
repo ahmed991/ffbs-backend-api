@@ -411,7 +411,7 @@ def process_indicator(params):
         )
 
         # Clean up NaN or Inf
-        wbi = np.nan_to_num(wbi)
+        wbi = wbi.fillna(0)
 
         # === Step 9: Threshold WBI to Detect Cotton ===
         # Based on the paper, optimal WBI threshold is typically 100–220
