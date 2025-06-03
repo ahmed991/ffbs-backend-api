@@ -416,7 +416,7 @@ def process_indicator(params):
         # === Step 9: Threshold WBI to Detect Cotton ===
         # Based on the paper, optimal WBI threshold is typically 100–220
         threshold = 120
-        cotton_mask = xr.where(wbi > threshold, 1, 0).astype('uint8')
+        cotton_mask = xr.where(wbi > threshold, 1, 0)
   # 1 = Cotton, 0 = Non-Cotton
         cotton_pixels = np.sum(cotton_mask[0] == 1)
 
