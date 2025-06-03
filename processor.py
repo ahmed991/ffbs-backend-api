@@ -417,7 +417,13 @@ def process_indicator(params):
         # Based on the paper, optimal WBI threshold is typically 100–220
         threshold = 120
         cotton_mask = (wbi > threshold).astype('uint8')  # 1 = Cotton, 0 = Non-Cotton
+        cotton_pixels = np.sum(cotton_mask[0] == 1)
 
+        # Each pixel is 100 m²
+        area_m2 = cotton_pixels * 100
+
+        # Convert to hectares
+        area_ha = area_m2 / 10000
         # For output consistency, assign cotton_mask to index
         index = cotton_mask
     
@@ -473,9 +479,18 @@ def process_indicator(params):
             "colormap_used": colormap_used
 
         })
-
-    return {
+    if indicator == "COTTON":
+        return {
+            {
         "message": f"{indicator} index computed.",
+        "Cotton Actual Area (ha)": area_ha,
         "products": saved_files
     }
+        }
+    else:
+
+        return {
+            "message": f"{indicator} index computed.",
+            "products": saved_files
+        }
 
