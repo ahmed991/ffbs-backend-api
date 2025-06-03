@@ -287,6 +287,8 @@ def process_indicator(params):
         indicator = "SCL"
     elif (indicator == "Soil Fertility Map" or indicator == "SOIL FERTILITY MAP"):
         indicator = "SFM"
+    elif (indicator == "Main Crop Identification" or indicator =="MAIN CROP IDENTIFICATION"):
+        indicator = "COTTON"
 
     print(indicator)
 
@@ -305,7 +307,19 @@ def process_indicator(params):
         "MSI": ["nir", "swir16"],
         "SAVI": ["nir", "red"],
         "SCL": ["scl"],
-        "SFM": ["nir", "red"]
+        "SFM": ["nir", "red"],
+        "COTTON":[
+            'blue',        # B02
+            'green',       # B03
+            'red',         # B04
+            'rededge1',    # B05
+            'rededge2',    # B06
+            'rededge3',    # B07
+            'nir',         # B08
+            'nir08',       # B8A (Narrow NIR)
+            'swir16',      # B11
+            'swir22'       # B12
+        ]
     }
 
     bands_required = INDICATOR_BAND_MAP.get(indicator)
@@ -368,6 +382,45 @@ def process_indicator(params):
     elif indicator == "SFM":
         ndvi = (stack.sel(band="nir") - stack.sel(band="red")) / (stack.sel(band="nir") + stack.sel(band="red") + 1e-6)
         index = classify_ndvi(ndvi)
+    elif indicator == "COTTON":
+        # Scale factor to match original Sentinel-2 0–10000 range
+        scale_factor = 10000
+
+        # Extract needed bands and scale them
+        blue = stack.sel(band='blue') * scale_factor
+        green = stack.sel(band='green') * scale_factor
+        red = stack.sel(band='red') * scale_factor
+        rededge3 = stack.sel(band='rededge3') * scale_factor
+        narrow_nir = stack.sel(band='nir08') * scale_factor
+        nir = stack.sel(band='nir') * scale_factor
+        rededge2 = stack.sel(band='rededge2') * scale_factor
+        swir1 = stack.sel(band='swir16') * scale_factor
+        swir2 = stack.sel(band='swir22') * scale_factor
+
+        # === Step 8: Calculate WBI ===
+        wbi = (
+            1.07 * blue
+            - 0.68 * green
+            - 0.24 * red
+            + 0.17 * rededge3
+            - 0.04 * narrow_nir
+            - 0.39 * nir
+            + 0.04 * rededge2
+            + 0.36 * swir1
+            - 0.01 * swir2
+        )
+
+        # Clean up NaN or Inf
+        wbi = np.nan_to_num(wbi)
+
+        # === Step 9: Threshold WBI to Detect Cotton ===
+        # Based on the paper, optimal WBI threshold is typically 100–220
+        threshold = 120
+        cotton_mask = (wbi > threshold).astype('uint8')  # 1 = Cotton, 0 = Non-Cotton
+
+        # For output consistency, assign cotton_mask to index
+        index = cotton_mask
+    
     else:
         return {"error": f"Indicator logic for {indicator} not implemented."}
 
