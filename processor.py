@@ -482,12 +482,11 @@ def process_indicator(params):
         })
     if indicator == "COTTON":
         return {
-            {
         "message": f"{indicator} index computed.",
         "Cotton Actual Area (ha)": area_ha,
         "products": saved_files
     }
-        }
+        
     else:
 
         return {
