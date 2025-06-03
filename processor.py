@@ -418,7 +418,7 @@ def process_indicator(params):
         threshold = 120
         cotton_mask = xr.where(wbi > threshold, 1, 0)
   # 1 = Cotton, 0 = Non-Cotton
-        cotton_pixels = np.sum(cotton_mask[0] == 1)
+        cotton_pixels = cotton_mask.sum().compute().item()
 
         # Each pixel is 100 m²
         area_m2 = cotton_pixels * 100
