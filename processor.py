@@ -425,6 +425,7 @@ def process_indicator(params):
 
         # Convert to hectares
         area_ha = area_m2 / 10000
+        print(area_ha)
         # For output consistency, assign cotton_mask to index
         index = cotton_mask
     
