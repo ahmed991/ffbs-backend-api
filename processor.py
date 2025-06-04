@@ -418,14 +418,14 @@ def process_indicator(params):
         threshold = 120
         cotton_mask = xr.where(wbi > threshold, 1, 0)
   # 1 = Cotton, 0 = Non-Cotton
-        cotton_pixels = cotton_mask.sum().compute().item()
+        # cotton_pixels = cotton_mask.sum().compute().item()
 
-        # Each pixel is 100 m²
-        area_m2 = cotton_pixels * 100
+        # # Each pixel is 100 m²
+        # area_m2 = cotton_pixels * 100
 
-        # Convert to hectares
-        area_ha = area_m2 / 10000
-        print(area_ha)
+        # # Convert to hectares
+        # area_ha = area_m2 / 10000
+        # print(area_ha)
         # For output consistency, assign cotton_mask to index
         index = cotton_mask
     
@@ -459,39 +459,57 @@ def process_indicator(params):
 
         colormap_used = plot_tif_as_png(tif_path, png_path, indicator)
 
-        if indicator in ["NDVI", "NDWI", "NDMI", "EVI", "PVI", "LAI"]:
+        if indicator in ["NDVI", "NDWI", "NDMI", "EVI", "PVI", "LAI","COTTON"]:
             value_range = {
                 "NDVI": (-1, 1), "NDWI": (-1, 1), "NDMI": (-1, 1),
-                "EVI": (0, 3), "PVI": (0, 2), "LAI": (0, 6)
+                "EVI": (0, 3), "PVI": (0, 2), "LAI": (0, 6),"COTTON":(0, 1)
             }.get(indicator)
         else:
             value_range = None
 
         save_legend_image(legend_path, indicator, colormap_used, value_range)
+
         # Save legend image
         print(f"http://3.121.112.193:8000/raster/{quote(legend_path.split('/')[-1].replace('.png', ''))}")
-        saved_files.append({
-            "timestamp": timestamp,
+        if indicator == "COTTON":
+            cotton_pixels = (arr == 1).sum()  # NumPy array, 1's are cotton
+            area_m2 = cotton_pixels * 100
+            area_ha = area_m2 / 10000  # hectares
 
-            "tif_url": f"http://3.121.112.193:8000/raster/{quote(tif_filename.replace('.tif', ''))}/tif",
-            "png_url": f"http://3.121.112.193:8000/raster/{quote(tif_filename.replace('.tif', ''))}",
-            "legend_url": f"http://3.121.112.193:8000/raster/{quote(legend_path.split('/')[-1].replace('.png', ''))}",
+            # Save into saved_files with area
+            saved_files.append({
+                "timestamp": timestamp,
+                "cotton_area_ha": round(area_ha, 2),
+                "tif_url": f"http://3.121.112.193:8000/raster/{quote(tif_filename.replace('.tif', ''))}/tif",
+                "png_url": f"http://3.121.112.193:8000/raster/{quote(tif_filename.replace('.tif', ''))}",
+                "legend_url": f"http://3.121.112.193:8000/raster/{quote(legend_path.split('/')[-1].replace('.png', ''))}",
+                "bounds": list(bounds),
+                "colormap_used": colormap_used
+            })
+        else:
+        # For other indicators
+            saved_files.append({
+                "timestamp": timestamp,
+                "tif_url": f"http://3.121.112.193:8000/raster/{quote(tif_filename.replace('.tif', ''))}/tif",
+                "png_url": f"http://3.121.112.193:8000/raster/{quote(tif_filename.replace('.tif', ''))}",
+                "legend_url": f"http://3.121.112.193:8000/raster/{quote(legend_path.split('/')[-1].replace('.png', ''))}",
+                "bounds": list(bounds),
+                "colormap_used": colormap_used
+            })
 
-            "bounds": list(bounds),
-            "colormap_used": colormap_used
+        # saved_files.append({
+        #     "timestamp": timestamp,
 
-        })
-    if indicator == "COTTON":
-        return {
+        #     "tif_url": f"http://3.121.112.193:8000/raster/{quote(tif_filename.replace('.tif', ''))}/tif",
+        #     "png_url": f"http://3.121.112.193:8000/raster/{quote(tif_filename.replace('.tif', ''))}",
+        #     "legend_url": f"http://3.121.112.193:8000/raster/{quote(legend_path.split('/')[-1].replace('.png', ''))}",
+
+        #     "bounds": list(bounds),
+        #     "colormap_used": colormap_used
+
+        # })
+    return {
         "message": f"{indicator} index computed.",
-        "Cotton Actual Area (ha)": area_ha,
         "products": saved_files
     }
-        
-    else:
-
-        return {
-            "message": f"{indicator} index computed.",
-            "products": saved_files
-        }
 
